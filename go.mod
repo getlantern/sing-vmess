@@ -1,4 +1,4 @@
-module github.com/sagernet/sing-vmess
+module github.com/getlantern/sing-vmess
 
 go 1.20
 

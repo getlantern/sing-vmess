@@ -6,8 +6,8 @@ import (
 	"errors"
 	"io"
 
-	vmess "github.com/sagernet/sing-vmess"
-	"github.com/sagernet/sing-vmess/buf"
+	vmess "github.com/getlantern/sing-vmess"
+	"github.com/getlantern/sing-vmess/buf"
 	"github.com/sagernet/sing/common"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"

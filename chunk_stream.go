@@ -4,9 +4,9 @@ import (
 	"crypto/cipher"
 	"io"
 
-	"github.com/sagernet/sing-vmess/buf"
-	"github.com/sagernet/sing-vmess/bufio"
-	N "github.com/sagernet/sing-vmess/network"
+	"github.com/getlantern/sing-vmess/buf"
+	"github.com/getlantern/sing-vmess/bufio"
+	N "github.com/getlantern/sing-vmess/network"
 )
 
 type StreamReader struct {

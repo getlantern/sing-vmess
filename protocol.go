@@ -11,8 +11,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/sagernet/sing-vmess/buf"
-	"github.com/sagernet/sing-vmess/bufio"
+	"github.com/getlantern/sing-vmess/buf"
+	"github.com/getlantern/sing-vmess/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
 

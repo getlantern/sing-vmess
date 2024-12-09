@@ -3,7 +3,7 @@ package vless
 import (
 	"bytes"
 
-	"github.com/sagernet/sing-vmess/buf"
+	"github.com/getlantern/sing-vmess/buf"
 )
 
 var (
