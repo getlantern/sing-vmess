@@ -4,6 +4,7 @@ import (
 	std_bufio "bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -11,12 +12,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
-	N "github.com/sagernet/sing/common/network"
 )
 
 func HandleMuxConnection(ctx context.Context, conn net.Conn, source M.Socksaddr, handler Handler) error {
@@ -395,14 +396,21 @@ func (c *serverMuxConn) Write(b []byte) (n int, err error) {
 
 func (c *serverMuxConn) WriteBuffer(buffer *buf.Buffer) error {
 	dataLen := buffer.Len()
-	header := buf.With(buffer.ExtendHeader(8))
-	common.Must(
+	b, err := buffer.ExtendHeader(8)
+	if err != nil {
+		return err
+	}
+	header := buf.With(b)
+	err = errors.Join(
 		binary.Write(header, binary.BigEndian, uint16(4)),
 		binary.Write(header, binary.BigEndian, c.sessionID),
 		binary.Write(header, binary.BigEndian, uint8(StatusKeep)),
 		binary.Write(header, binary.BigEndian, uint8(OptionData)),
 		binary.Write(header, binary.BigEndian, uint16(dataLen)),
 	)
+	if err != nil {
+		return err
+	}
 	return c.session.directWriter.WriteBuffer(buffer)
 }
 
@@ -505,19 +513,29 @@ func (c *serverMuxPacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error
 
 func (c *serverMuxPacketConn) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) error {
 	dataLen := buffer.Len()
-	header := buf.With(buffer.ExtendHeader(9 + AddressSerializer.AddrPortLen(destination)))
-	common.Must(
+	b, err := buffer.ExtendHeader(9 + AddressSerializer.AddrPortLen(destination))
+	if err != nil {
+		return err
+	}
+	header := buf.With(b)
+	err = errors.Join(
 		binary.Write(header, binary.BigEndian, uint16(5+AddressSerializer.AddrPortLen(destination))),
 		binary.Write(header, binary.BigEndian, c.sessionID),
 		binary.Write(header, binary.BigEndian, uint8(StatusKeep)),
 		binary.Write(header, binary.BigEndian, uint8(OptionData)),
 		binary.Write(header, binary.BigEndian, uint8(NetworkUDP)),
 	)
-	err := AddressSerializer.WriteAddrPort(header, destination)
 	if err != nil {
 		return err
 	}
-	common.Must(binary.Write(header, binary.BigEndian, uint16(dataLen)))
+	err = AddressSerializer.WriteAddrPort(header, destination)
+	if err != nil {
+		return err
+	}
+	err = binary.Write(header, binary.BigEndian, uint16(dataLen))
+	if err != nil {
+		return err
+	}
 	return c.session.directWriter.WriteBuffer(buffer)
 }
 

@@ -11,12 +11,12 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/logger"
-	N "github.com/sagernet/sing/common/network"
 )
 
 var tlsRegistry []func(conn net.Conn) (loaded bool, netConn net.Conn, reflectType reflect.Type, reflectPointer uintptr)
@@ -202,14 +202,26 @@ func (c *VisionConn) Write(p []byte) (n int, err error) {
 					command = commandPaddingDirect
 				}
 				c.isPadding = false
-				buffers[i] = c.padding(buffer, command)
+				b, err := c.padding(buffer, command)
+				if err != nil {
+					return 0, err
+				}
+				buffers[i] = b
 				break
 			} else if !c.isTLS12orAbove && c.numberOfPacketToFilter <= 1 {
 				c.isPadding = false
-				buffers[i] = c.padding(buffer, commandPaddingEnd)
+				b, err := c.padding(buffer, commandPaddingEnd)
+				if err != nil {
+					return 0, err
+				}
+				buffers[i] = b
 				break
 			}
-			buffers[i] = c.padding(buffer, commandPaddingContinue)
+			b, err := c.padding(buffer, commandPaddingContinue)
+			if err != nil {
+				return 0, err
+			}
+			buffers[i] = b
 		}
 		if c.directWrite {
 			encryptedBuffer := buffers[:specIndex+1]
@@ -283,7 +295,7 @@ func (c *VisionConn) filterTLS(buffers [][]byte) {
 	}
 }
 
-func (c *VisionConn) padding(buffer *buf.Buffer, command byte) *buf.Buffer {
+func (c *VisionConn) padding(buffer *buf.Buffer, command byte) (*buf.Buffer, error) {
 	contentLen := 0
 	paddingLen := 0
 	if buffer != nil {
@@ -307,17 +319,26 @@ func (c *VisionConn) padding(buffer *buf.Buffer, command byte) *buf.Buffer {
 	bufferLen += paddingLen
 	newBuffer := buf.NewSize(bufferLen)
 	if c.writeUUID {
-		common.Must1(newBuffer.Write(c.userUUID[:]))
+		_, err := newBuffer.Write(c.userUUID[:])
+		if err != nil {
+			return nil, err
+		}
 		c.writeUUID = false
 	}
-	common.Must1(newBuffer.Write([]byte{command, byte(contentLen >> 8), byte(contentLen), byte(paddingLen >> 8), byte(paddingLen)}))
+	_, err := newBuffer.Write([]byte{command, byte(contentLen >> 8), byte(contentLen), byte(paddingLen >> 8), byte(paddingLen)})
+	if err != nil {
+		return nil, err
+	}
 	if buffer != nil {
-		common.Must1(newBuffer.Write(buffer.Bytes()))
+		_, err := newBuffer.Write(buffer.Bytes())
+		if err != nil {
+			return nil, err
+		}
 		buffer.Release()
 	}
 	newBuffer.Extend(paddingLen)
 	c.logger.Trace("XtlsPadding ", contentLen, " ", paddingLen, " ", command)
-	return newBuffer
+	return newBuffer, nil
 }
 
 func (c *VisionConn) unPadding(buffer []byte) []*buf.Buffer {

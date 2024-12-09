@@ -6,14 +6,14 @@ import (
 	"io"
 	"net"
 
-	"github.com/sagernet/sing-vmess"
+	vmess "github.com/sagernet/sing-vmess"
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 	"github.com/sagernet/sing/common/auth"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
-	N "github.com/sagernet/sing/common/network"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -22,7 +22,6 @@ type Service[T comparable] struct {
 	userMap  map[[16]byte]T
 	userFlow map[T]string
 	logger   logger.Logger
-	handler  Handler
 }
 
 type Handler interface {
@@ -30,10 +29,9 @@ type Handler interface {
 	N.UDPConnectionHandlerEx
 }
 
-func NewService[T comparable](logger logger.Logger, handler Handler) *Service[T] {
+func NewService[T comparable](logger logger.Logger) *Service[T] {
 	return &Service[T]{
-		logger:  logger,
-		handler: handler,
+		logger: logger,
 	}
 }
 
@@ -52,7 +50,7 @@ func (s *Service[T]) UpdateUsers(userList []T, userUUIDList []string, userFlowLi
 	s.userFlow = userFlowMap
 }
 
-func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, source M.Socksaddr, onClose N.CloseHandlerFunc) error {
+func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, source M.Socksaddr, onClose N.CloseHandlerFunc, handler Handler) error {
 	request, err := ReadRequest(conn)
 	if err != nil {
 		return err
@@ -70,7 +68,7 @@ func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, source M.
 	}
 
 	if request.Command == vmess.CommandUDP {
-		s.handler.NewPacketConnectionEx(ctx, &serverPacketConn{ExtendedConn: bufio.NewExtendedConn(conn), destination: request.Destination}, source, request.Destination, onClose)
+		handler.NewPacketConnectionEx(ctx, &serverPacketConn{ExtendedConn: bufio.NewExtendedConn(conn), destination: request.Destination}, source, request.Destination, onClose)
 		return nil
 	}
 	responseConn := &serverConn{ExtendedConn: bufio.NewExtendedConn(conn), writer: bufio.NewVectorisedWriter(conn)}
@@ -87,10 +85,10 @@ func (s *Service[T]) NewConnection(ctx context.Context, conn net.Conn, source M.
 	}
 	switch request.Command {
 	case vmess.CommandTCP:
-		s.handler.NewConnectionEx(ctx, conn, source, request.Destination, onClose)
+		handler.NewConnectionEx(ctx, conn, source, request.Destination, onClose)
 		return nil
 	case vmess.CommandMux:
-		return vmess.HandleMuxConnection(ctx, conn, source, s.handler)
+		return vmess.HandleMuxConnection(ctx, conn, source, handler)
 	default:
 		return E.New("unknown command: ", request.Command)
 	}
@@ -129,7 +127,11 @@ func (c *serverConn) Write(b []byte) (n int, err error) {
 
 func (c *serverConn) WriteBuffer(buffer *buf.Buffer) error {
 	if !c.responseWritten {
-		header := buffer.ExtendHeader(2)
+		b, err := buffer.ExtendHeader(2)
+		if err != nil {
+			return err
+		}
+		header := b
 		header[0] = Version
 		header[1] = 0
 		c.responseWritten = true
@@ -244,7 +246,11 @@ func (c *serverPacketConn) WritePacket(buffer *buf.Buffer, destination M.Socksad
 		}
 	}
 	packetLen := buffer.Len()
-	binary.BigEndian.PutUint16(buffer.ExtendHeader(2), uint16(packetLen))
+	b, err := buffer.ExtendHeader(2)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint16(b, uint16(packetLen))
 	return c.ExtendedConn.WriteBuffer(buffer)
 }
 

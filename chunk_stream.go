@@ -4,9 +4,9 @@ import (
 	"crypto/cipher"
 	"io"
 
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
-	N "github.com/sagernet/sing/common/network"
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 )
 
 type StreamReader struct {
@@ -14,11 +14,15 @@ type StreamReader struct {
 	cipher   cipher.Stream
 }
 
-func NewStreamReader(upstream io.Reader, key []byte, iv []byte) *StreamReader {
+func NewStreamReader(upstream io.Reader, key []byte, iv []byte) (*StreamReader, error) {
+	cipher, err := newAesStream(key, iv, cipher.NewCFBDecrypter)
+	if err != nil {
+		return nil, err
+	}
 	return &StreamReader{
 		upstream: bufio.NewExtendedReader(upstream),
-		cipher:   newAesStream(key, iv, cipher.NewCFBDecrypter),
-	}
+		cipher:   cipher,
+	}, nil
 }
 
 func (r *StreamReader) Read(p []byte) (n int, err error) {
@@ -48,11 +52,16 @@ type StreamWriter struct {
 	cipher   cipher.Stream
 }
 
-func NewStreamWriter(upstream io.Writer, key []byte, iv []byte) *StreamWriter {
+func NewStreamWriter(upstream io.Writer, key []byte, iv []byte) (*StreamWriter, error) {
+	cipher, err := newAesStream(key, iv, cipher.NewCFBEncrypter)
+	if err != nil {
+		return nil, err
+	}
+
 	return &StreamWriter{
 		upstream: bufio.NewExtendedWriter(upstream),
-		cipher:   newAesStream(key, iv, cipher.NewCFBEncrypter),
-	}
+		cipher:   cipher,
+	}, nil
 }
 
 func (w *StreamWriter) Write(p []byte) (n int, err error) {

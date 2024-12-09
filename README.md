@@ -1,3 +1,7 @@
+This repo is a fork of [sing-vmess](https://github.com/SagerNet/sing-vmess) with the following changes:
+1. No panics anywhere. All methods (excepet the allocator) that could panic before will now return errors
+2. VMess/VLess Service now accepts Handler as part of NewConnection to allow synchronous handling of incoming connections
+
 # sing-vmess
 
 Some confusing protocol.

@@ -2,15 +2,15 @@ package vmess
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 
-	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
-	N "github.com/sagernet/sing/common/network"
 )
 
 type MuxConnWrapper struct {
@@ -111,8 +111,12 @@ func (c *MuxConnWrapper) WriteBuffer(buffer *buf.Buffer) error {
 	dataLen := buffer.Len()
 	addrLen := M.SocksaddrSerializer.AddrPortLen(c.destination)
 	if !c.requestWritten {
-		header := buf.With(buffer.ExtendHeader(c.frontHeadroom(addrLen)))
-		common.Must(
+		b, err := buffer.ExtendHeader(c.frontHeadroom(addrLen))
+		if err != nil {
+			return err
+		}
+		header := buf.With(b)
+		err = errors.Join(
 			binary.Write(header, binary.BigEndian, uint16(5+addrLen)),
 			header.WriteByte(0),
 			header.WriteByte(0),
@@ -120,14 +124,23 @@ func (c *MuxConnWrapper) WriteBuffer(buffer *buf.Buffer) error {
 			header.WriteByte(1), // option data
 			header.WriteByte(NetworkTCP),
 		)
-		err := AddressSerializer.WriteAddrPort(header, c.destination)
 		if err != nil {
 			return err
 		}
-		common.Must(binary.Write(header, binary.BigEndian, uint16(dataLen)))
+		err = AddressSerializer.WriteAddrPort(header, c.destination)
+		if err != nil {
+			return err
+		}
+		err = binary.Write(header, binary.BigEndian, uint16(dataLen))
+		if err != nil {
+			return err
+		}
 		c.requestWritten = true
 	} else {
-		header := buffer.ExtendHeader(c.frontHeadroom(addrLen))
+		header, err := buffer.ExtendHeader(c.frontHeadroom(addrLen))
+		if err != nil {
+			return err
+		}
 		binary.BigEndian.PutUint16(header, 4)
 		header[2] = 0
 		header[3] = 0

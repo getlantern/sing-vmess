@@ -3,12 +3,11 @@ package packetaddr
 import (
 	"net"
 
-	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 	E "github.com/sagernet/sing/common/exceptions"
 	M "github.com/sagernet/sing/common/metadata"
-	N "github.com/sagernet/sing/common/network"
 )
 
 type PacketConn struct {
@@ -67,7 +66,10 @@ func (c *PacketConn) WriteTo(p []byte, addr net.Addr) (n int, err error) {
 	if err != nil {
 		return
 	}
-	common.Must1(buffer.Write(p))
+	_, err = buffer.Write(p)
+	if err != nil {
+		return 0, err
+	}
 	return c.NetPacketConn.WriteTo(buffer.Bytes(), c.bindAddr.UDPAddr())
 }
 
@@ -87,8 +89,12 @@ func (c *PacketConn) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) er
 	if destination.IsFqdn() {
 		return E.Extend(ErrFqdnUnsupported, destination.Fqdn)
 	}
-	header := buf.With(buffer.ExtendHeader(AddressSerializer.AddrPortLen(destination)))
-	err := AddressSerializer.WriteAddrPort(header, destination)
+	b, err := buffer.ExtendHeader(AddressSerializer.AddrPortLen(destination))
+	if err != nil {
+		return err
+	}
+	header := buf.With(b)
+	err = AddressSerializer.WriteAddrPort(header, destination)
 	if err != nil {
 		return err
 	}

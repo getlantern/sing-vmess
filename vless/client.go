@@ -6,14 +6,14 @@ import (
 	"net"
 	"sync"
 
-	"github.com/sagernet/sing-vmess"
+	vmess "github.com/sagernet/sing-vmess"
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/logger"
 	M "github.com/sagernet/sing/common/metadata"
-	N "github.com/sagernet/sing/common/network"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -150,7 +150,11 @@ func (c *Conn) Write(b []byte) (n int, err error) {
 
 func (c *Conn) WriteBuffer(buffer *buf.Buffer) error {
 	if !c.requestWritten {
-		err := EncodeRequest(c.request, buf.With(buffer.ExtendHeader(RequestLen(c.request))))
+		l, err := buffer.ExtendHeader(RequestLen(c.request))
+		if err != nil {
+			return err
+		}
+		err = EncodeRequest(c.request, buf.With(l))
 		if err != nil {
 			return err
 		}
@@ -253,7 +257,11 @@ func (c *PacketConn) Write(b []byte) (n int, err error) {
 func (c *PacketConn) WritePacket(buffer *buf.Buffer, destination M.Socksaddr) error {
 	defer buffer.Release()
 	dataLen := buffer.Len()
-	binary.BigEndian.PutUint16(buffer.ExtendHeader(2), uint16(dataLen))
+	d, err := buffer.ExtendHeader(2)
+	if err != nil {
+		return err
+	}
+	binary.BigEndian.PutUint16(d, uint16(dataLen))
 	if !c.requestWritten {
 		c.access.Lock()
 		if c.requestWritten {

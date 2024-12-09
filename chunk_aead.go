@@ -5,9 +5,9 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
-	N "github.com/sagernet/sing/common/network"
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 )
 
 type AEADReader struct {
@@ -27,12 +27,20 @@ func NewAEADReader(upstream io.Reader, cipher cipher.AEAD, nonce []byte) *AEADRe
 	}
 }
 
-func NewAes128GcmReader(upstream io.Reader, key []byte, nonce []byte) *AEADReader {
-	return NewAEADReader(upstream, newAesGcm(key), nonce)
+func NewAes128GcmReader(upstream io.Reader, key []byte, nonce []byte) (*AEADReader, error) {
+	gcm, err := newAesGcm(key)
+	if err != nil {
+		return nil, err
+	}
+	return NewAEADReader(upstream, gcm, nonce), nil
 }
 
-func NewChacha20Poly1305Reader(upstream io.Reader, key []byte, nonce []byte) *AEADReader {
-	return NewAEADReader(upstream, newChacha20Poly1305(GenerateChacha20Poly1305Key(key)), nonce)
+func NewChacha20Poly1305Reader(upstream io.Reader, key []byte, nonce []byte) (*AEADReader, error) {
+	poly, err := newChacha20Poly1305(GenerateChacha20Poly1305Key(key))
+	if err != nil {
+		return nil, err
+	}
+	return NewAEADReader(upstream, poly, nonce), nil
 }
 
 func (r *AEADReader) Read(p []byte) (n int, err error) {
@@ -86,12 +94,20 @@ func NewAEADWriter(upstream io.Writer, cipher cipher.AEAD, nonce []byte) *AEADWr
 	}
 }
 
-func NewAes128GcmWriter(upstream io.Writer, key []byte, nonce []byte) *AEADWriter {
-	return NewAEADWriter(upstream, newAesGcm(key), nonce)
+func NewAes128GcmWriter(upstream io.Writer, key []byte, nonce []byte) (*AEADWriter, error) {
+	gcm, err := newAesGcm(key)
+	if err != nil {
+		return nil, err
+	}
+	return NewAEADWriter(upstream, gcm, nonce), nil
 }
 
-func NewChacha20Poly1305Writer(upstream io.Writer, key []byte, nonce []byte) *AEADWriter {
-	return NewAEADWriter(upstream, newChacha20Poly1305(GenerateChacha20Poly1305Key(key)), nonce)
+func NewChacha20Poly1305Writer(upstream io.Writer, key []byte, nonce []byte) (*AEADWriter, error) {
+	chacha, err := newChacha20Poly1305(GenerateChacha20Poly1305Key(key))
+	if err != nil {
+		return nil, err
+	}
+	return NewAEADWriter(upstream, chacha, nonce), err
 }
 
 func (w *AEADWriter) Write(p []byte) (n int, err error) {

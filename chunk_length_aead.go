@@ -7,11 +7,10 @@ import (
 	"io"
 	"sync"
 
-	"github.com/sagernet/sing/common"
-	"github.com/sagernet/sing/common/buf"
-	"github.com/sagernet/sing/common/bufio"
+	"github.com/sagernet/sing-vmess/buf"
+	"github.com/sagernet/sing-vmess/bufio"
+	N "github.com/sagernet/sing-vmess/network"
 	E "github.com/sagernet/sing/common/exceptions"
-	N "github.com/sagernet/sing/common/network"
 
 	"golang.org/x/crypto/sha3"
 )
@@ -35,12 +34,20 @@ func NewAEADChunkReader(upstream io.Reader, cipher cipher.AEAD, nonce []byte, gl
 	}
 }
 
-func NewAes128GcmChunkReader(upstream io.Reader, key []byte, nonce []byte, globalPadding sha3.ShakeHash) *AEADChunkReader {
-	return NewAEADChunkReader(upstream, newAesGcm(KDF(key, "auth_len")[:16]), nonce, globalPadding)
+func NewAes128GcmChunkReader(upstream io.Reader, key []byte, nonce []byte, globalPadding sha3.ShakeHash) (*AEADChunkReader, error) {
+	gcm, err := newAesGcm(KDF(key, "auth_len")[:16])
+	if err != nil {
+		return nil, err
+	}
+	return NewAEADChunkReader(upstream, gcm, nonce, globalPadding), nil
 }
 
-func NewChacha20Poly1305ChunkReader(upstream io.Reader, key []byte, nonce []byte, globalPadding sha3.ShakeHash) *AEADChunkReader {
-	return NewAEADChunkReader(upstream, newChacha20Poly1305(GenerateChacha20Poly1305Key(KDF(key, "auth_len")[:16])), nonce, globalPadding)
+func NewChacha20Poly1305ChunkReader(upstream io.Reader, key []byte, nonce []byte, globalPadding sha3.ShakeHash) (*AEADChunkReader, error) {
+	chacha, err := newChacha20Poly1305(GenerateChacha20Poly1305Key(KDF(key, "auth_len")[:16]))
+	if err != nil {
+		return nil, err
+	}
+	return NewAEADChunkReader(upstream, chacha, nonce, globalPadding), nil
 }
 
 func (r *AEADChunkReader) Read(p []byte) (n int, err error) {
@@ -63,7 +70,10 @@ func (r *AEADChunkReader) Read(p []byte) (n int, err error) {
 	var paddingLen int
 	if r.globalPadding != nil {
 		var hashCode uint16
-		common.Must(binary.Read(r.globalPadding, binary.BigEndian, &hashCode))
+		err = binary.Read(r.globalPadding, binary.BigEndian, &hashCode)
+		if err != nil {
+			return
+		}
 		paddingLen = int(hashCode % 64)
 		dataLen -= paddingLen
 	}
@@ -115,12 +125,20 @@ func NewAEADChunkWriter(upstream io.Writer, cipher cipher.AEAD, nonce []byte, gl
 	}
 }
 
-func NewAes128GcmChunkWriter(upstream io.Writer, key []byte, nonce []byte, globalPadding sha3.ShakeHash) *AEADChunkWriter {
-	return NewAEADChunkWriter(upstream, newAesGcm(KDF(key, "auth_len")[:16]), nonce, globalPadding)
+func NewAes128GcmChunkWriter(upstream io.Writer, key []byte, nonce []byte, globalPadding sha3.ShakeHash) (*AEADChunkWriter, error) {
+	gcm, err := newAesGcm(KDF(key, "auth_len")[:16])
+	if err != nil {
+		return nil, err
+	}
+	return NewAEADChunkWriter(upstream, gcm, nonce, globalPadding), nil
 }
 
-func NewChacha20Poly1305ChunkWriter(upstream io.Writer, key []byte, nonce []byte, globalPadding sha3.ShakeHash) *AEADChunkWriter {
-	return NewAEADChunkWriter(upstream, newChacha20Poly1305(GenerateChacha20Poly1305Key(KDF(key, "auth_len")[:16])), nonce, globalPadding)
+func NewChacha20Poly1305ChunkWriter(upstream io.Writer, key []byte, nonce []byte, globalPadding sha3.ShakeHash) (*AEADChunkWriter, error) {
+	chacha, err := newChacha20Poly1305(GenerateChacha20Poly1305Key(KDF(key, "auth_len")[:16]))
+	if err != nil {
+		return nil, err
+	}
+	return NewAEADChunkWriter(upstream, chacha, nonce, globalPadding), nil
 }
 
 func (w *AEADChunkWriter) Write(p []byte) (n int, err error) {
@@ -129,7 +147,10 @@ func (w *AEADChunkWriter) Write(p []byte) (n int, err error) {
 	if w.globalPadding != nil {
 		w.hashAccess.Lock()
 		var hashCode uint16
-		common.Must(binary.Read(w.globalPadding, binary.BigEndian, &hashCode))
+		err = binary.Read(w.globalPadding, binary.BigEndian, &hashCode)
+		if err != nil {
+			return
+		}
 		paddingLen = hashCode % MaxPaddingSize
 		dataLength += paddingLen
 		w.hashAccess.Unlock()
@@ -137,7 +158,11 @@ func (w *AEADChunkWriter) Write(p []byte) (n int, err error) {
 	dataLength -= CipherOverhead
 
 	lengthBuffer := buf.NewSize(2 + CipherOverhead)
-	binary.BigEndian.PutUint16(lengthBuffer.Extend(2), dataLength)
+	b, err := lengthBuffer.Extend(2)
+	if err != nil {
+		return 0, err
+	}
+	binary.BigEndian.PutUint16(b, dataLength)
 
 	binary.BigEndian.PutUint16(w.nonce, w.nonceCount)
 	w.nonceCount += 1
@@ -172,13 +197,19 @@ func (w *AEADChunkWriter) WriteBuffer(buffer *buf.Buffer) error {
 	if w.globalPadding != nil {
 		w.hashAccess.Lock()
 		var hashCode uint16
-		common.Must(binary.Read(w.globalPadding, binary.BigEndian, &hashCode))
+		err := binary.Read(w.globalPadding, binary.BigEndian, &hashCode)
+		if err != nil {
+			return err
+		}
 		paddingLen = hashCode % MaxPaddingSize
 		dataLength += paddingLen
 		w.hashAccess.Unlock()
 	}
 	dataLength -= CipherOverhead
-	lengthBuffer := buffer.ExtendHeader(2 + CipherOverhead)
+	lengthBuffer, err := buffer.ExtendHeader(2 + CipherOverhead)
+	if err != nil {
+		return err
+	}
 	binary.BigEndian.PutUint16(lengthBuffer, dataLength)
 	binary.BigEndian.PutUint16(w.nonce, w.nonceCount)
 	w.nonceCount += 1
