@@ -8,8 +8,8 @@ require (
 	github.com/sagernet/sing v0.6.0-alpha.18
 	github.com/sagernet/utls v1.6.7
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/crypto v0.29.0
-	golang.org/x/sys v0.27.0
+	golang.org/x/crypto v0.35.0
+	golang.org/x/sys v0.30.0
 )
 
 require (
