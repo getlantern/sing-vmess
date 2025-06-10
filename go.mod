@@ -1,6 +1,6 @@
 module github.com/getlantern/sing-vmess
 
-go 1.20
+go 1.22.0
 
 require (
 	github.com/gofrs/uuid/v5 v5.3.0
@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
-	github.com/cloudflare/circl v1.3.7 // indirect
+	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
