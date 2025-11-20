@@ -1,6 +1,6 @@
 module github.com/getlantern/sing-vmess
 
-go 1.20
+go 1.24.0
 
 require (
 	github.com/gofrs/uuid/v5 v5.3.0
@@ -8,8 +8,8 @@ require (
 	github.com/sagernet/sing v0.6.0-alpha.18
 	github.com/sagernet/utls v1.6.7
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/crypto v0.29.0
-	golang.org/x/sys v0.27.0
+	golang.org/x/crypto v0.45.0
+	golang.org/x/sys v0.38.0
 )
 
 require (
